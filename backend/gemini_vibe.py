@@ -64,12 +64,55 @@ def _configure():
     genai.configure(api_key=key)
 
 
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+_BAD_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_SMART_QUOTES = str.maketrans({
+    "\u201c": '"', "\u201d": '"',
+    "\u2018": "'", "\u2019": "'",
+})
+
+
+def _try_loads(s: str) -> dict | None:
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        return None
+
+
 def _parse_json(raw: str) -> dict:
-    raw = raw.strip()
+    raw = (raw or "").strip()
+    # strip code fences if Gemini wrapped despite instructions
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
     m = re.search(r"\{.*\}", raw, re.DOTALL)
     if not m:
         raise ValueError(f"No JSON found in model output: {raw[:200]}")
-    return json.loads(m.group(0))
+    body = m.group(0)
+
+    # Pass 1: as-is
+    parsed = _try_loads(body)
+    if parsed is not None:
+        return parsed
+
+    # Pass 2: normalize quotes + strip trailing commas + drop bad control chars
+    cleaned = body.translate(_SMART_QUOTES)
+    cleaned = _TRAILING_COMMA.sub(r"\1", cleaned)
+    cleaned = _BAD_CONTROL.sub("", cleaned)
+    parsed = _try_loads(cleaned)
+    if parsed is not None:
+        return parsed
+
+    # Pass 3: try truncating to last balanced brace (Gemini sometimes cuts off)
+    last_close = cleaned.rfind("}")
+    if last_close > 0:
+        parsed = _try_loads(cleaned[: last_close + 1])
+        if parsed is not None:
+            return parsed
+
+    # Final: surface real error
+    json.loads(cleaned)  # raises with detail
+    return {}  # unreachable
 
 
 def analyze_audio(audio_path: Path, mime_type: str) -> dict:
@@ -85,18 +128,31 @@ def analyze_audio(audio_path: Path, mime_type: str) -> dict:
     if uploaded.state.name != "ACTIVE":
         raise RuntimeError(f"file not active: state={uploaded.state.name}")
 
-    resp = model.generate_content(
-        [SYSTEM_PROMPT, uploaded],
-        generation_config={
-            "response_mime_type": "application/json",
-            "temperature": 0.35,
-            "max_output_tokens": 8192,
-        },
-    )
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            resp = model.generate_content(
+                [SYSTEM_PROMPT, uploaded],
+                generation_config={
+                    "response_mime_type": "application/json",
+                    # second attempt: lower temp → less creative tokens that
+                    # might break JSON
+                    "temperature": 0.35 if attempt == 0 else 0.1,
+                    "max_output_tokens": 8192,
+                },
+            )
+            result = _parse_json(resp.text)
+            try:
+                genai.delete_file(uploaded.name)
+            except Exception:
+                pass
+            return result
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+            continue
 
     try:
         genai.delete_file(uploaded.name)
     except Exception:
         pass
-
-    return _parse_json(resp.text)
+    raise RuntimeError(f"could not parse Gemini response after retry: {last_err}")
