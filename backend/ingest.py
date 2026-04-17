@@ -75,28 +75,62 @@ def download_audio(url: str, dest_no_ext: Path) -> tuple[Path, str, dict]:
     if duration and duration > MAX_DURATION_SEC:
         raise IngestError(f"track too long ({duration}s, max {MAX_DURATION_SEC}s)")
 
-    # Permissive cascade — try audio-only formats first, then any format.
-    # If the chosen stream is video+audio, yt-dlp can still extract the
-    # audio file from disk; we accept whatever extension lands.
-    download_opts = {
-        "format": (
-            "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/"
-            "bestaudio/best[acodec!=none]/best"
-        ),
+    # Try a series of progressively looser format selectors. YouTube serves
+    # different format sets per `player_client`, and any single selector can
+    # come back empty. Stop at the first one that downloads successfully.
+    base = {
         "outtmpl": str(dest_no_ext) + ".%(ext)s",
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
         "restrictfilenames": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
         **cookie,
     }
-    try:
-        with yt_dlp.YoutubeDL(download_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-    except Exception as e:
-        raise IngestError(f"download failed: {e}") from e
+    attempts: list[dict[str, Any]] = [
+        # 1: audio-only via android client (most reliable for audio-only)
+        {
+            **base,
+            "format": "bestaudio/best",
+            "extractor_args": {"youtube": {"player_client": ["android"]}},
+        },
+        # 2: same with ios client
+        {
+            **base,
+            "format": "bestaudio/best",
+            "extractor_args": {"youtube": {"player_client": ["ios"]}},
+        },
+        # 3: web client, looser selector
+        {
+            **base,
+            "format": "bestaudio*/best*/b",
+            "extractor_args": {"youtube": {"player_client": ["web", "web_safari"]}},
+        },
+        # 4: last resort — let yt-dlp default. May require ffmpeg to mux.
+        {
+            **base,
+            "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
+        },
+    ]
+
+    last_err: Optional[Exception] = None
+    info = None
+    for opts_try in attempts:
+        try:
+            with yt_dlp.YoutubeDL(opts_try) as ydl:
+                info = ydl.extract_info(url, download=True)
+            break
+        except Exception as e:
+            last_err = e
+            # clean any partial file before retrying
+            for p in dest_no_ext.parent.glob(dest_no_ext.name + ".*"):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+
+    if info is None:
+        raise IngestError(f"download failed: {last_err}") from last_err
 
     # resolve actual downloaded file path
     downloaded: Optional[Path] = None
