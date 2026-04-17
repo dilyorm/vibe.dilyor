@@ -6,6 +6,7 @@ import StarRating from "@/components/StarRating";
 import StoryDeck from "@/components/StoryDeck";
 import ShareDialog from "@/components/ShareDialog";
 import { audioUrl, getVibe, rateVibe, similarVibes } from "@/lib/api";
+import { createAmp, useAudioAmp } from "@/lib/audioAmp";
 import { hasVibe, type Palette, type Vibe, type VibeListItem } from "@/lib/types";
 
 const FALLBACK_PALETTE: Palette = {
@@ -23,6 +24,9 @@ export default function VibeClient({ id }: { id: string }) {
   const [similar, setSimilar] = useState<VibeListItem[]>([]);
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const ampRef = useRef(createAmp());
+  const [everPlayed, setEverPlayed] = useState(false);
+  useAudioAmp(audioRef, ampRef, everPlayed);
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -56,6 +60,7 @@ export default function VibeClient({ id }: { id: string }) {
   const togglePlay = () => {
     const el = audioRef.current;
     if (!el) return;
+    setEverPlayed(true);
     if (el.paused) el.play().catch(() => {});
     else el.pause();
   };
@@ -150,7 +155,10 @@ export default function VibeClient({ id }: { id: string }) {
         src={audioUrl(vibe.id)}
         preload="metadata"
         crossOrigin="anonymous"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setEverPlayed(true);
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
@@ -176,6 +184,7 @@ export default function VibeClient({ id }: { id: string }) {
         similar={similar}
         ratingNode={ratingNode}
         shareNode={shareNode}
+        ampRef={ampRef}
       />
 
       <ShareDialog

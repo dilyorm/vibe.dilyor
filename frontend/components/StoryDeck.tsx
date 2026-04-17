@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CharacterAvatar from "./CharacterAvatar";
+import type { Amp } from "@/lib/audioAmp";
 import type { LyricLine, Palette, Storyline, VibeListItem } from "@/lib/types";
 
 type SlideKind = "intro" | "vibe" | "scene" | "characters" | "story" | "lyrics" | "outro";
@@ -29,6 +31,7 @@ interface Props {
   similar: VibeListItem[];
   ratingNode: React.ReactNode;
   shareNode: React.ReactNode;
+  ampRef: React.MutableRefObject<Amp>;
 }
 
 export default function StoryDeck({
@@ -50,9 +53,17 @@ export default function StoryDeck({
   similar,
   ratingNode,
   shareNode,
+  ampRef,
 }: Props) {
   const story = storyline ?? {};
   const characters = story.characters ?? [];
+
+  // Build a distinct color per character by hue-shifting palette.accent.
+  // Keeps the family of colors coherent but gives each character its own tint.
+  const charColors = useMemo(
+    () => characters.map((_, i) => shiftHue(palette.accent, (i - (characters.length - 1) / 2) * 35)),
+    [characters, palette.accent],
+  );
 
   const slides = useMemo<Slide[]>(() => {
     const s: Slide[] = [{ kind: "intro", duration: 5 }];
@@ -153,7 +164,15 @@ export default function StoryDeck({
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <Backdrop palette={palette} coverUrl={coverUrl} kind={slide.kind} />
+      <Backdrop
+        palette={palette}
+        coverUrl={coverUrl}
+        kind={slide.kind}
+        characters={characters}
+        charColors={charColors}
+        vibeSeed={vibeName ?? title}
+        ampRef={ampRef}
+      />
 
       {/* progress bars */}
       <div
@@ -243,6 +262,8 @@ export default function StoryDeck({
           similar={similar}
           ratingNode={ratingNode}
           shareNode={shareNode}
+          charColors={charColors}
+          ampRef={ampRef}
         />
       </div>
     </div>
@@ -253,13 +274,42 @@ function Backdrop({
   palette,
   coverUrl,
   kind,
+  characters,
+  charColors,
+  vibeSeed,
+  ampRef,
 }: {
   palette: Palette;
   coverUrl?: string | null;
   kind: SlideKind;
+  characters: { name: string; role: string }[];
+  charColors: string[];
+  vibeSeed: string;
+  ampRef: React.MutableRefObject<Amp>;
 }) {
   const showCover = !!coverUrl;
   const blur = kind === "lyrics" ? 40 : 60;
+
+  // Ambient drifting avatars in the deep background — characters' "auras"
+  // continue to inhabit the whole experience, not just the characters slide.
+  // Hidden on the characters slide itself (focus shifts to foreground avatars).
+  const ambient = useMemo(() => {
+    const pool = characters.length > 0
+      ? characters.map((c, i) => ({ name: c.name, color: charColors[i] }))
+      : [{ name: vibeSeed, color: palette.accent }];
+    // cap at 2 to keep RAF loops cheap on mobile
+    const items = pool.slice(0, 2);
+    return items.map((it, i) => {
+      const a = (i + 1) * 0.37 + 0.13;
+      return {
+        ...it,
+        x: 15 + ((a * 100) % 70),
+        y: 18 + (((a * 1.7) * 100) % 60),
+      };
+    });
+  }, [characters, charColors, vibeSeed, palette.accent]);
+
+  const showAmbient = kind !== "characters" && kind !== "outro";
 
   return (
     <div className="absolute inset-0 -z-0 overflow-hidden">
@@ -281,11 +331,37 @@ function Backdrop({
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: `blur(${blur}px) saturate(140%)`,
-            opacity: 0.55,
+            opacity: 0.5,
             transform: "scale(1.2)",
           }}
         />
       )}
+
+      {/* ambient character auras drifting behind everything */}
+      {showAmbient &&
+        ambient.map((a, i) => (
+          <div
+            key={`${a.name}-${i}`}
+            className="absolute pointer-events-none"
+            style={{
+              left: `${a.x}%`,
+              top: `${a.y}%`,
+              transform: "translate(-50%, -50%)",
+              opacity: 0.35,
+              filter: "blur(8px)",
+              mixBlendMode: "screen",
+            }}
+          >
+            <CharacterAvatar
+              name={a.name}
+              color={a.color}
+              ampRef={ampRef}
+              size={260}
+              intensity={0.45}
+              drift
+            />
+          </div>
+        ))}
 
       {/* accent glow */}
       <div
@@ -333,6 +409,8 @@ function SlideContent(props: {
   similar: VibeListItem[];
   ratingNode: React.ReactNode;
   shareNode: React.ReactNode;
+  charColors: string[];
+  ampRef: React.MutableRefObject<Amp>;
 }) {
   const {
     slide,
@@ -350,6 +428,8 @@ function SlideContent(props: {
     similar,
     ratingNode,
     shareNode,
+    charColors,
+    ampRef,
   } = props;
 
   switch (slide.kind) {
@@ -380,14 +460,24 @@ function SlideContent(props: {
     case "vibe":
       return (
         <div className="flex flex-col items-center text-center max-w-xl animate-rise">
-          <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-4 sm:mb-5">
+          {/* big mood orb representing the song's overall energy */}
+          <div className="mb-4 sm:mb-6">
+            <CharacterAvatar
+              name={vibeName ?? mood ?? "vibe"}
+              color={accent}
+              ampRef={ampRef}
+              size={180}
+              intensity={1.4}
+            />
+          </div>
+          <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-3">
             {mood ?? "the vibe"}
           </p>
           <h2 className="font-serif text-3xl sm:text-4xl md:text-6xl tracking-tight leading-[1.05]">
             {vibeName}
           </h2>
           {description && (
-            <p className="mt-6 sm:mt-8 text-base sm:text-lg md:text-xl opacity-90 leading-relaxed font-serif italic">
+            <p className="mt-5 sm:mt-7 text-base sm:text-lg md:text-xl opacity-90 leading-relaxed font-serif italic">
               {description}
             </p>
           )}
@@ -408,27 +498,47 @@ function SlideContent(props: {
 
     case "characters":
       return (
-        <div className="flex flex-col items-center text-center max-w-md animate-rise w-full">
+        <div className="flex flex-col items-center text-center max-w-2xl animate-rise w-full">
           <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-6 sm:mb-8">
             who&apos;s in the song
           </p>
-          <ul className="flex flex-col gap-5 sm:gap-6 w-full">
+          <div
+            className={`grid gap-4 sm:gap-6 w-full ${
+              (storyline.characters ?? []).length === 1
+                ? "grid-cols-1"
+                : (storyline.characters ?? []).length === 2
+                ? "grid-cols-2"
+                : "grid-cols-2 sm:grid-cols-3"
+            }`}
+          >
             {(storyline.characters ?? []).map((c, i) => (
-              <li
+              <div
                 key={i}
-                className="flex flex-col gap-1 animate-rise"
-                style={{ animationDelay: `${i * 0.15}s` }}
+                className="flex flex-col items-center gap-2 animate-rise"
+                style={{ animationDelay: `${i * 0.18}s` }}
               >
+                <div className="grid place-items-center">
+                  <CharacterAvatar
+                    name={c.name}
+                    color={charColors[i] ?? accent}
+                    ampRef={ampRef}
+                    size={120}
+                    intensity={1.1}
+                    drift
+                  />
+                </div>
                 <span
-                  className="font-serif text-xl sm:text-2xl md:text-3xl"
-                  style={{ color: accent }}
+                  className="font-serif text-base sm:text-lg md:text-xl mt-1"
+                  style={{ color: charColors[i] ?? accent }}
                 >
                   {c.name}
                 </span>
-                <span className="opacity-75 text-sm md:text-base px-4">{c.role}</span>
-              </li>
+                <span className="opacity-70 text-xs sm:text-sm leading-snug px-2">
+                  {c.role}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       );
 
@@ -512,6 +622,52 @@ function SlideContent(props: {
         </div>
       );
   }
+}
+
+function shiftHue(hex: string, deg: number): string {
+  const m = hex.replace("#", "");
+  if (m.length !== 6) return hex;
+  const r = parseInt(m.slice(0, 2), 16) / 255;
+  const g = parseInt(m.slice(2, 4), 16) / 255;
+  const b = parseInt(m.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let s = 0;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case r:
+        h = ((g - b) / d) % 6;
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  h = (h + deg + 360) % 360;
+  // back to RGB
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const mLight = l - c / 2;
+  let rp = 0, gp = 0, bp = 0;
+  if (h < 60) [rp, gp, bp] = [c, x, 0];
+  else if (h < 120) [rp, gp, bp] = [x, c, 0];
+  else if (h < 180) [rp, gp, bp] = [0, c, x];
+  else if (h < 240) [rp, gp, bp] = [0, x, c];
+  else if (h < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  const toHex = (v: number) =>
+    Math.round((v + mLight) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(rp)}${toHex(gp)}${toHex(bp)}`;
 }
 
 function LyricsSlide({
