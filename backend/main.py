@@ -80,7 +80,7 @@ def _list_view(v: dict) -> dict:
 
 @app.get("/api/vibes")
 def list_vibes():
-    return [_list_view(v) for v in storage.list_vibes()]
+    return [_list_view(v) for v in storage.list_vibes() if v.get("status") == "ready"]
 
 
 @app.get("/api/vibes/{vibe_id}/similar")
