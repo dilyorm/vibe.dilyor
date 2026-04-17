@@ -110,14 +110,17 @@ export function useAudio(
       ampRef.current.high = hi / (data.length - mdEnd);
       ampRef.current.overall = all / data.length;
 
-      // smooth-crossfade remix state
+      // smooth-crossfade remix state. Heavy on the filter/reverb when held
+      // so the effect is unmistakable, not subtle.
       const now = ctx.currentTime;
-      const targetFreq = remixRef.current.on ? 420 : 22000;
-      const targetWet = remixRef.current.on ? 0.55 : 0;
-      const targetDry = remixRef.current.on ? 0.65 : 1.0;
-      filter.frequency.linearRampToValueAtTime(targetFreq, now + 0.25);
-      wetGain.gain.linearRampToValueAtTime(targetWet, now + 0.25);
-      dryGain.gain.linearRampToValueAtTime(targetDry, now + 0.25);
+      const targetFreq = remixRef.current.on ? 280 : 22000;
+      const targetQ = remixRef.current.on ? 3.0 : 0.7;
+      const targetWet = remixRef.current.on ? 0.9 : 0;
+      const targetDry = remixRef.current.on ? 0.45 : 1.0;
+      filter.frequency.linearRampToValueAtTime(targetFreq, now + 0.2);
+      filter.Q.linearRampToValueAtTime(targetQ, now + 0.2);
+      wetGain.gain.linearRampToValueAtTime(targetWet, now + 0.2);
+      dryGain.gain.linearRampToValueAtTime(targetDry, now + 0.2);
 
       raf = requestAnimationFrame(loop);
     };

@@ -30,6 +30,11 @@ export default function CharacterFigure({
 }) {
   const figureKind = figure ?? inferFigure(role + " " + name);
 
+  // Sanitize id: gradient URL refs like `url(#stroke-narrator-the narrator)`
+  // silently fail because of the space. Characters often include spaces,
+  // apostrophes, non-Latin letters. Hash the name to a stable short id.
+  const safeId = `fig-${figureKind}-${hashName(name)}`;
+
   const bodyRef = useRef<SVGGElement>(null);
 
   useEffect(() => {
@@ -79,7 +84,7 @@ export default function CharacterFigure({
         aria-hidden
       >
         <defs>
-          <linearGradient id={`stroke-${figureKind}-${name}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={safeId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.95" />
             <stop offset="100%" stopColor={color} stopOpacity="0.55" />
           </linearGradient>
@@ -87,10 +92,11 @@ export default function CharacterFigure({
         <g
           ref={bodyRef}
           fill="none"
-          stroke={`url(#stroke-${figureKind}-${name})`}
-          strokeWidth="2.6"
+          stroke={`url(#${safeId})`}
+          strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={{ color }}
         >
           <FigurePath kind={figureKind} />
         </g>
@@ -201,6 +207,15 @@ function FigurePath({ kind }: { kind: FigureKind }) {
         </>
       );
   }
+}
+
+function hashName(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h.toString(36);
 }
 
 /** Fallback inference when Gemini omits `figure` — keyword match on role text. */

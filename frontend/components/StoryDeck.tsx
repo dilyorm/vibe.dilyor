@@ -239,8 +239,8 @@ export default function StoryDeck({
         </button>
       </div>
 
-      {/* tap zones — disabled on outro (interactive content there) */}
-      {slide.kind !== "outro" && (
+      {/* tap zones — disabled on outro + remix (interactive content there) */}
+      {slide.kind !== "outro" && slide.kind !== "remix" && (
         <>
           <button
             aria-label="previous"
@@ -689,6 +689,7 @@ function RemixSlide({
 
   const onStart = (e: React.PointerEvent) => {
     e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     remixRef.current.on = true;
     setHeld(true);
   };
@@ -697,7 +698,6 @@ function RemixSlide({
     setHeld(false);
   };
 
-  // show a couple of the current + next lyric lines (big), if any
   const sorted = useMemo(
     () => [...lyrics].sort((a, b) => a.time - b.time),
     [lyrics],
@@ -715,34 +715,38 @@ function RemixSlide({
   const next = idx + 1 < sorted.length ? sorted[idx + 1]?.text : "";
 
   return (
-    <div
-      className="relative flex flex-col items-center text-center max-w-xl w-full select-none"
-      onPointerDown={onStart}
-      onPointerUp={onEnd}
-      onPointerCancel={onEnd}
-      onPointerLeave={onEnd}
-      style={{ touchAction: "none" }}
-    >
-      <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-4">
+    <div className="relative flex flex-col items-center text-center max-w-xl w-full select-none z-30">
+      <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-5">
         a different angle
       </p>
 
-      <div
-        className="rounded-3xl w-full py-10 sm:py-14 px-6 transition-all duration-300"
+      {/* Full-width press pad. Covers most of the slide so anywhere you put
+          your finger counts as a hold. */}
+      <button
+        type="button"
+        onPointerDown={onStart}
+        onPointerUp={onEnd}
+        onPointerCancel={onEnd}
+        onPointerLeave={onEnd}
+        onContextMenu={(e) => e.preventDefault()}
+        className="relative rounded-3xl w-full py-14 sm:py-20 px-6 transition-all duration-300 block"
         style={{
-          background: held ? `${accent}22` : "transparent",
-          border: `1px solid ${held ? accent + "55" : "rgba(255,255,255,0.15)"}`,
-          transform: held ? "scale(1.01)" : "scale(1)",
-          backdropFilter: held ? "blur(8px)" : "none",
+          background: held ? `${accent}2a` : "rgba(255,255,255,0.04)",
+          border: `1px solid ${held ? accent + "80" : "rgba(255,255,255,0.18)"}`,
+          transform: held ? "scale(1.02)" : "scale(1)",
+          boxShadow: held ? `0 30px 80px ${accent}35` : "none",
+          touchAction: "none",
+          cursor: held ? "grabbing" : "grab",
         }}
       >
         <p
-          className="font-serif text-2xl sm:text-3xl leading-snug transition-all duration-300"
+          className="font-serif leading-snug transition-all duration-300"
           style={{
             color: accent,
             fontStyle: held ? "italic" : "normal",
+            fontSize: held ? "2rem" : "1.6rem",
             letterSpacing: held ? "0.02em" : "0",
-            opacity: held ? 1 : 0.85,
+            opacity: held ? 1 : 0.9,
             filter: held ? "blur(0)" : "blur(0.4px)",
           }}
         >
@@ -752,15 +756,30 @@ function RemixSlide({
           <p className="mt-4 font-serif text-lg opacity-60 italic">{next}</p>
         )}
         {!held && (
-          <p className="mt-4 text-xs opacity-50 tracking-wide">
+          <p className="mt-4 text-xs opacity-60 tracking-wide">
             hear the song from further away
           </p>
         )}
-      </div>
+      </button>
 
-      <p className="mt-6 text-[10px] uppercase tracking-[0.3em] opacity-40">
-        release to return
-      </p>
+      {/* Explicit nav — tap zones are disabled on this slide so holds aren't
+          stolen by the previous/next regions. */}
+      <div className="mt-6 flex items-center gap-4 relative z-40 pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }))}
+          className="rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.25em] border border-white/15 bg-white/5 hover:bg-white/15 transition"
+        >
+          ← back
+        </button>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))}
+          className="rounded-full px-4 py-2 text-[11px] uppercase tracking-[0.25em] border border-white/15 bg-white/5 hover:bg-white/15 transition"
+        >
+          next →
+        </button>
+      </div>
     </div>
   );
 }
