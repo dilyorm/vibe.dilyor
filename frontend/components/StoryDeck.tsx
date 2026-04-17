@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CharacterAvatar from "./CharacterAvatar";
-import type { Amp } from "@/lib/audioAmp";
+import CharacterFigure from "./CharacterFigure";
+import Poster from "./Poster";
+import type { Amp, RemixState } from "@/lib/audioAmp";
 import type { LyricLine, Palette, Storyline, VibeListItem } from "@/lib/types";
 
-type SlideKind = "intro" | "vibe" | "scene" | "characters" | "story" | "lyrics" | "outro";
+type SlideKind = "intro" | "vibe" | "scene" | "characters" | "story" | "lyrics" | "remix" | "outro";
 
 interface Slide {
   kind: SlideKind;
@@ -21,6 +23,7 @@ interface Props {
   summary?: string;
   storyline?: Storyline;
   lyrics: LyricLine[];
+  lyricsConfidence?: number;
   palette: Palette;
   coverUrl?: string | null;
   audioRef: React.RefObject<HTMLAudioElement>;
@@ -32,6 +35,9 @@ interface Props {
   ratingNode: React.ReactNode;
   shareNode: React.ReactNode;
   ampRef: React.MutableRefObject<Amp>;
+  remixRef: React.MutableRefObject<RemixState>;
+  onSaveReflection?: (text: string) => Promise<void>;
+  sharePath?: string | null;
 }
 
 export default function StoryDeck({
@@ -54,6 +60,10 @@ export default function StoryDeck({
   ratingNode,
   shareNode,
   ampRef,
+  remixRef,
+  lyricsConfidence,
+  onSaveReflection,
+  sharePath,
 }: Props) {
   const story = storyline ?? {};
   const characters = story.characters ?? [];
@@ -65,16 +75,22 @@ export default function StoryDeck({
     [characters, palette.accent],
   );
 
+  // Only show lyrics when Gemini was confident. Low-confidence transcriptions
+  // were making the lyrics slide read like gibberish for unclear vocals.
+  const showLyrics = lyrics.length > 0 && (lyricsConfidence ?? 1) >= 0.55;
+
   const slides = useMemo<Slide[]>(() => {
     const s: Slide[] = [{ kind: "intro", duration: 5 }];
     if (vibeName || description) s.push({ kind: "vibe", duration: 7 });
     if (story.setting) s.push({ kind: "scene", duration: 6 });
     if (characters.length > 0) s.push({ kind: "characters", duration: 7 });
     if (summary || story.arc) s.push({ kind: "story", duration: 9 });
-    if (lyrics.length > 0) s.push({ kind: "lyrics", duration: Math.max(20, duration || 30) });
+    if (showLyrics) s.push({ kind: "lyrics", duration: Math.max(20, duration || 30) });
+    // Remix slide: only if there's audio (hold-to-filter has no point otherwise)
+    if (duration > 0) s.push({ kind: "remix", duration: 14 });
     s.push({ kind: "outro", duration: 0 });
     return s;
-  }, [vibeName, description, story.setting, story.arc, characters.length, summary, lyrics.length, duration]);
+  }, [vibeName, description, story.setting, story.arc, characters.length, summary, showLyrics, duration]);
 
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -263,11 +279,15 @@ export default function StoryDeck({
           time={time}
           coverUrl={coverUrl}
           accent={accent}
+          palette={palette}
           similar={similar}
           ratingNode={ratingNode}
           shareNode={shareNode}
           charColors={charColors}
           ampRef={ampRef}
+          remixRef={remixRef}
+          onSaveReflection={onSaveReflection}
+          sharePath={sharePath}
         />
       </div>
     </div>
@@ -410,11 +430,15 @@ function SlideContent(props: {
   time: number;
   coverUrl?: string | null;
   accent: string;
+  palette: Palette;
   similar: VibeListItem[];
   ratingNode: React.ReactNode;
   shareNode: React.ReactNode;
   charColors: string[];
   ampRef: React.MutableRefObject<Amp>;
+  remixRef: React.MutableRefObject<RemixState>;
+  onSaveReflection?: (text: string) => Promise<void>;
+  sharePath?: string | null;
 }) {
   const {
     slide,
@@ -429,11 +453,15 @@ function SlideContent(props: {
     time,
     coverUrl,
     accent,
+    palette,
     similar,
     ratingNode,
     shareNode,
     charColors,
     ampRef,
+    remixRef,
+    onSaveReflection,
+    sharePath,
   } = props;
 
   switch (slide.kind) {
@@ -521,16 +549,14 @@ function SlideContent(props: {
                 className="flex flex-col items-center gap-2 animate-rise"
                 style={{ animationDelay: `${i * 0.18}s` }}
               >
-                <div className="grid place-items-center">
-                  <CharacterAvatar
-                    name={c.name}
-                    color={charColors[i] ?? accent}
-                    ampRef={ampRef}
-                    size={120}
-                    intensity={1.1}
-                    drift
-                  />
-                </div>
+                <CharacterFigure
+                  name={c.name}
+                  role={c.role}
+                  figure={c.figure}
+                  color={charColors[i] ?? accent}
+                  ampRef={ampRef}
+                  size={160}
+                />
                 <span
                   className="font-serif text-base sm:text-lg md:text-xl mt-1"
                   style={{ color: charColors[i] ?? accent }}
@@ -568,6 +594,9 @@ function SlideContent(props: {
     case "lyrics":
       return <LyricsSlide lyrics={lyrics} time={time} accent={accent} />;
 
+    case "remix":
+      return <RemixSlide remixRef={remixRef} accent={accent} lyrics={lyrics} time={time} />;
+
     case "outro":
       return (
         <div className="flex flex-col items-center text-center max-w-xl animate-rise gap-7 sm:gap-10 w-full">
@@ -584,7 +613,24 @@ function SlideContent(props: {
             {ratingNode}
           </div>
 
-          <div className="relative z-20">{shareNode}</div>
+          <ReflectionBox
+            accent={accent}
+            onSave={onSaveReflection}
+          />
+
+          <div className="relative z-20 flex flex-wrap items-center justify-center gap-3">
+            {shareNode}
+            <Poster
+              title={title}
+              vibeName={vibeName}
+              mood={mood}
+              artist={artist}
+              palette={palette}
+              lyrics={lyrics}
+              storyline={storyline}
+              sharePath={sharePath}
+            />
+          </div>
 
           {similar.length > 0 && (
             <div className="w-full relative z-20">
@@ -626,6 +672,151 @@ function SlideContent(props: {
         </div>
       );
   }
+}
+
+function RemixSlide({
+  remixRef,
+  accent,
+  lyrics,
+  time,
+}: {
+  remixRef: React.MutableRefObject<RemixState>;
+  accent: string;
+  lyrics: LyricLine[];
+  time: number;
+}) {
+  const [held, setHeld] = useState(false);
+
+  const onStart = (e: React.PointerEvent) => {
+    e.preventDefault();
+    remixRef.current.on = true;
+    setHeld(true);
+  };
+  const onEnd = () => {
+    remixRef.current.on = false;
+    setHeld(false);
+  };
+
+  // show a couple of the current + next lyric lines (big), if any
+  const sorted = useMemo(
+    () => [...lyrics].sort((a, b) => a.time - b.time),
+    [lyrics],
+  );
+  const idx = useMemo(() => {
+    if (!sorted.length) return -1;
+    let i = 0;
+    for (let j = 0; j < sorted.length; j++) {
+      if (sorted[j].time <= time + 0.2) i = j;
+      else break;
+    }
+    return i;
+  }, [sorted, time]);
+  const curr = idx >= 0 ? sorted[idx]?.text : "";
+  const next = idx + 1 < sorted.length ? sorted[idx + 1]?.text : "";
+
+  return (
+    <div
+      className="relative flex flex-col items-center text-center max-w-xl w-full select-none"
+      onPointerDown={onStart}
+      onPointerUp={onEnd}
+      onPointerCancel={onEnd}
+      onPointerLeave={onEnd}
+      style={{ touchAction: "none" }}
+    >
+      <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60 mb-4">
+        a different angle
+      </p>
+
+      <div
+        className="rounded-3xl w-full py-10 sm:py-14 px-6 transition-all duration-300"
+        style={{
+          background: held ? `${accent}22` : "transparent",
+          border: `1px solid ${held ? accent + "55" : "rgba(255,255,255,0.15)"}`,
+          transform: held ? "scale(1.01)" : "scale(1)",
+          backdropFilter: held ? "blur(8px)" : "none",
+        }}
+      >
+        <p
+          className="font-serif text-2xl sm:text-3xl leading-snug transition-all duration-300"
+          style={{
+            color: accent,
+            fontStyle: held ? "italic" : "normal",
+            letterSpacing: held ? "0.02em" : "0",
+            opacity: held ? 1 : 0.85,
+            filter: held ? "blur(0)" : "blur(0.4px)",
+          }}
+        >
+          {held ? (curr || "underwater") : "press and hold"}
+        </p>
+        {held && next && (
+          <p className="mt-4 font-serif text-lg opacity-60 italic">{next}</p>
+        )}
+        {!held && (
+          <p className="mt-4 text-xs opacity-50 tracking-wide">
+            hear the song from further away
+          </p>
+        )}
+      </div>
+
+      <p className="mt-6 text-[10px] uppercase tracking-[0.3em] opacity-40">
+        release to return
+      </p>
+    </div>
+  );
+}
+
+function ReflectionBox({
+  accent,
+  onSave,
+}: {
+  accent: string;
+  onSave?: (text: string) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  if (!onSave) return null;
+
+  const submit = async () => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    try {
+      await onSave(t);
+      setSaved(true);
+      setText("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-md flex flex-col gap-3 relative z-20">
+      <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] sm:tracking-[0.35em] opacity-60">
+        why does this song hit you?
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value.slice(0, 500))}
+        placeholder="a memory, a moment, a feeling…"
+        className="w-full min-h-[90px] px-4 py-3 rounded-2xl bg-white/8 border border-white/15 text-sm focus:border-white/40 focus:outline-none placeholder:opacity-40 resize-none"
+        disabled={busy || saved}
+      />
+      {!saved ? (
+        <button
+          onClick={submit}
+          disabled={busy || !text.trim()}
+          className="self-end rounded-full px-5 py-2 text-xs border border-white/20 bg-white/10 hover:bg-white/20 transition disabled:opacity-50"
+          style={{ color: accent }}
+        >
+          {busy ? "saving…" : "share"}
+        </button>
+      ) : (
+        <p className="text-xs opacity-70 italic self-end">kept. thanks.</p>
+      )}
+    </div>
+  );
 }
 
 function shiftHue(hex: string, deg: number): string {

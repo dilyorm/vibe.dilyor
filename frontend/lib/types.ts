@@ -22,9 +22,20 @@ export interface VibeMeta {
   keywords?: string[];
 }
 
+export type FigureKind =
+  | "narrator"
+  | "lover"
+  | "crowd"
+  | "observer"
+  | "dreamer"
+  | "wanderer"
+  | "ghost"
+  | "child";
+
 export interface Character {
   name: string;
   role: string;
+  figure?: FigureKind;
 }
 
 export interface Storyline {
@@ -41,8 +52,12 @@ export interface Vibe {
   status: "processing" | "ready" | "error";
   error?: string | null;
   lyrics: LyricLine[];
+  lyrics_confidence?: number;
   summary?: string;
   storyline?: Storyline;
+  reflections?: { text: string; at: number }[];
+  share_initials?: string | null;
+  share_index?: number | null;
   vibe: VibeMeta | Record<string, never>;
   audio_ext?: string;
   mime_type?: string;

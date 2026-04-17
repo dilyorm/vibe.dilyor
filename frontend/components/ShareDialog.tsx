@@ -1,42 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-async function saveName(id: string, name: string) {
-  const res = await fetch(`/api/vibes/${id}/share`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<{ creator_name: string; share_path: string }>;
-}
+import { shareVibe } from "@/lib/api";
 
 export default function ShareDialog({
   id,
   open,
   initialName,
+  initialInitials,
+  initialPath,
   onClose,
   accent = "#f5f5f7",
 }: {
   id: string;
   open: boolean;
   initialName?: string | null;
+  initialInitials?: string | null;
+  initialPath?: string | null;
   onClose: () => void;
   accent?: string;
 }) {
   const [name, setName] = useState(initialName ?? "");
+  const [initials, setInitials] = useState(initialInitials ?? "");
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (open && initialName) {
+    if (open && initialName && initialPath) {
       setName(initialName);
-      setLink(`${window.location.origin}/vibe/${id}`);
+      setInitials(initialInitials ?? "");
+      setLink(`${window.location.origin}${initialPath}`);
     }
-  }, [open, initialName, id]);
+  }, [open, initialName, initialInitials, initialPath, id]);
 
   if (!open) return null;
 
@@ -49,8 +46,9 @@ export default function ShareDialog({
     setBusy(true);
     setErr(null);
     try {
-      const r = await saveName(id, trimmed);
+      const r = await shareVibe(id, trimmed, initials.trim());
       setLink(`${window.location.origin}${r.share_path}`);
+      setInitials(r.share_initials);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "save failed");
     } finally {
@@ -104,7 +102,7 @@ export default function ShareDialog({
         {!link && (
           <>
             <p className="text-sm opacity-70 mb-4">
-              sign the vibe so others know whose ear found it.
+              sign the vibe — your initials become the short link.
             </p>
             <input
               autoFocus
@@ -115,6 +113,18 @@ export default function ShareDialog({
               placeholder="your name or handle"
               className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 focus:border-white/40 focus:outline-none placeholder:opacity-40"
             />
+            <input
+              value={initials}
+              onChange={(e) =>
+                setInitials(e.target.value.replace(/[^A-Za-z0-9]/g, "").toLowerCase().slice(0, 8))
+              }
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+              placeholder="initials (optional, auto-filled)"
+              className="mt-3 w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 focus:border-white/40 focus:outline-none placeholder:opacity-40 lowercase"
+            />
+            <p className="mt-2 text-[11px] opacity-50">
+              your link will look like <span className="opacity-80">vibe.dilyor.dev/{initials || "yourinitials"}/1</span>
+            </p>
             {err && <p className="mt-2 text-sm text-red-300">{err}</p>}
             <button
               onClick={submit}

@@ -36,6 +36,11 @@ class RatingIn(BaseModel):
 
 class ShareIn(BaseModel):
     name: str
+    initials: str = ""
+
+
+class ReflectionIn(BaseModel):
+    text: str
 
 
 class UrlIn(BaseModel):
@@ -75,7 +80,17 @@ def _list_view(v: dict) -> dict:
         "creator_name": v.get("creator_name"),
         "created_at": v.get("created_at"),
         "cover_url": v.get("cover_url") or v.get("thumbnail"),
+        "share_initials": v.get("share_initials"),
+        "share_index": v.get("share_index"),
     }
+
+
+_INITIAL_RE = re.compile(r"[^A-Za-z0-9]")
+
+
+def _normalize_initials(s: str) -> str:
+    s = _INITIAL_RE.sub("", s or "").lower()
+    return s[:8]
 
 
 @app.get("/api/vibes")
@@ -155,8 +170,55 @@ def share(vibe_id: str, body: ShareIn):
     if not v:
         raise HTTPException(404, "vibe not found")
     v["creator_name"] = name
+
+    # Vanity path: /{initials}/{index}. Initials default to first letters of
+    # the first two whitespace-separated tokens of `name` if user didn't
+    # specify. Index is the next integer under that initials namespace.
+    raw_initials = (body.initials or "").strip()
+    if not raw_initials:
+        parts = name.split()
+        raw_initials = "".join(p[0] for p in parts[:3] if p)
+    initials = _normalize_initials(raw_initials) or "vibe"
+
+    if not v.get("share_initials"):
+        existing = [
+            x for x in storage.list_vibes()
+            if x.get("share_initials") == initials and x["id"] != vibe_id
+        ]
+        next_idx = max((x.get("share_index") or 0) for x in existing) + 1 if existing else 1
+        v["share_initials"] = initials
+        v["share_index"] = next_idx
+
     storage.save_vibe(v)
-    return {"creator_name": name, "share_path": f"/vibe/{vibe_id}"}
+    path = f"/{v['share_initials']}/{v['share_index']}"
+    return {
+        "creator_name": name,
+        "share_initials": v["share_initials"],
+        "share_index": v["share_index"],
+        "share_path": path,
+    }
+
+
+@app.get("/api/handle/{initials}/{index}")
+def resolve_handle(initials: str, index: int):
+    key = _normalize_initials(initials)
+    for v in storage.list_vibes():
+        if v.get("share_initials") == key and int(v.get("share_index") or 0) == index:
+            return v
+    raise HTTPException(404, "not found")
+
+
+@app.post("/api/vibes/{vibe_id}/reflection")
+def save_reflection(vibe_id: str, body: ReflectionIn):
+    text = (body.text or "").strip()[:500]
+    v = storage.get_vibe(vibe_id)
+    if not v:
+        raise HTTPException(404, "vibe not found")
+    reflections = v.setdefault("reflections", [])
+    if text:
+        reflections.append({"text": text, "at": int(time.time())})
+        storage.save_vibe(v)
+    return {"reflections": reflections}
 
 
 def _process(vibe_id: str, path: Path, mime: str):
@@ -196,6 +258,7 @@ def _process(vibe_id: str, path: Path, mime: str):
                 "artist": result.get("artist") or existing.get("artist") or "",
                 "language": result.get("language") or "",
                 "lyrics": result.get("lyrics") or [],
+                "lyrics_confidence": float(result.get("lyrics_confidence") or 0),
                 "summary": result.get("summary") or "",
                 "storyline": result.get("storyline") or {},
                 "vibe": vibe_meta,

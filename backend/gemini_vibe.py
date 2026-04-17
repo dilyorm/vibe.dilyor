@@ -21,11 +21,12 @@ Return JSON with this exact shape:
   "lyrics": [
     { "time": 0.0, "text": "lyric line as you actually heard it" }
   ],
+  "lyrics_confidence": 0.85,
   "summary": "2-4 sentences. Plain-language explanation of what the song is ABOUT — the subject, the speaker's stance, what is happening emotionally. Avoid review-speak; write like you are telling a friend.",
   "storyline": {
     "setting": "1 short sentence sketching the scene/place/time the song lives in",
     "characters": [
-      { "name": "short label like 'the narrator', 'her', 'the city'", "role": "1 short phrase: what they do or stand for in the song" }
+      { "name": "short label like 'the narrator', 'her', 'the city'", "role": "1 short phrase: what they do or stand for in the song", "figure": "one of: narrator | lover | crowd | observer | dreamer | wanderer | ghost | child" }
     ],
     "arc": "2-3 short sentences describing how the song moves: where it starts, what shifts in the middle, where it ends"
   },
@@ -47,9 +48,11 @@ Return JSON with this exact shape:
 
 Hard rules for accuracy:
 - LYRICS: transcribe what is actually sung. Do not paraphrase. Do not invent. If a line is unclear, write your best phonetic guess — never fabricate.
+- LYRICS_CONFIDENCE: a 0..1 number for how sure you are the transcription is accurate. Use 0.85+ only when the vocals are clear, in a language you transcribe well, and you caught most lines. Use 0.3-0.55 for partially audible or heavy-accented vocals where you guessed. Use 0 for instrumental. Be honest — callers will hide the lyrics pane if this is low.
 - TIMESTAMPS: `time` is seconds from audio start, of when that line begins. Be precise within ~1.5s. Lines should be in chronological order. One sung phrase per entry (roughly 4-12 words). Do NOT clump several lines into one entry.
 - Cover repeated choruses each time they occur, with their own timestamps.
-- INSTRUMENTAL: if the track has no sung words, return `lyrics: []` and language `"Instrumental"`. The storyline can still describe an imagined scene, but say so honestly in the summary.
+- INSTRUMENTAL: if the track has no sung words, return `lyrics: []`, language `"Instrumental"`, `lyrics_confidence: 0`. The storyline can still describe an imagined scene, but say so honestly in the summary.
+- FIGURE: choose the enum tag that best matches each character. `narrator` = the speaker of the song; `lover` = romantic/sexual interest; `crowd` = a group or society; `observer` = a watching presence; `dreamer` = someone imagining; `wanderer` = travelling figure; `ghost` = someone absent or remembered; `child` = youth or innocence.
 - VIBE: the mood and palette must match what the audio actually conveys, not the title or artist. Dark/sad → dark muted palette. Bright/joyful → bright saturated palette. Calm → soft low-contrast. Aggressive → high contrast.
 - PALETTE: 5 distinct hex colors that read as a coherent gradient. `text` must have strong contrast against `bg_via`.
 - STORYLINE: 1-3 characters max. Keep names short. The arc must reflect the actual song progression you heard.

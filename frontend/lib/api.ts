@@ -58,6 +58,37 @@ export async function rateVibe(id: string, stars: number) {
   return res.json() as Promise<{ avg_rating: number; num_ratings: number }>;
 }
 
+export async function shareVibe(id: string, name: string, initials = "") {
+  const res = await fetch(`${BASE}/vibes/${id}/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, initials }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<{
+    creator_name: string;
+    share_initials: string;
+    share_index: number;
+    share_path: string;
+  }>;
+}
+
+export async function saveReflection(id: string, text: string) {
+  const res = await fetch(`${BASE}/vibes/${id}/reflection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error("could not save");
+  return res.json();
+}
+
+export async function resolveHandle(initials: string, index: number): Promise<Vibe> {
+  const res = await fetch(`${BASE}/handle/${initials}/${index}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("not found");
+  return res.json();
+}
+
 export function audioUrl(id: string) {
   return `${BASE}/vibes/${id}/audio`;
 }

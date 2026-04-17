@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import StarRating from "@/components/StarRating";
 import StoryDeck from "@/components/StoryDeck";
 import ShareDialog from "@/components/ShareDialog";
-import { audioUrl, getVibe, rateVibe, similarVibes } from "@/lib/api";
-import { createAmp, useAudioAmp } from "@/lib/audioAmp";
+import { audioUrl, getVibe, rateVibe, saveReflection, similarVibes } from "@/lib/api";
+import { createAmp, createRemix, useAudio } from "@/lib/audioAmp";
 import { hasVibe, type Palette, type Vibe, type VibeListItem } from "@/lib/types";
 
 const FALLBACK_PALETTE: Palette = {
@@ -25,8 +25,9 @@ export default function VibeClient({ id }: { id: string }) {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const ampRef = useRef(createAmp());
+  const remixRef = useRef(createRemix());
   const [everPlayed, setEverPlayed] = useState(false);
-  useAudioAmp(audioRef, ampRef, everPlayed);
+  useAudio(audioRef, ampRef, remixRef, everPlayed);
 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -73,6 +74,17 @@ export default function VibeClient({ id }: { id: string }) {
       setRatingMsg("couldn't save rating");
     }
   };
+
+  const submitReflection = useCallback(
+    async (text: string) => {
+      try {
+        await saveReflection(id, text);
+      } catch {
+        /* silent; user sees nothing is saved */
+      }
+    },
+    [id],
+  );
 
   if (err) {
     return (
@@ -174,6 +186,7 @@ export default function VibeClient({ id }: { id: string }) {
         summary={vibe.summary}
         storyline={vibe.storyline}
         lyrics={vibe.lyrics}
+        lyricsConfidence={vibe.lyrics_confidence}
         palette={palette}
         coverUrl={coverUrl}
         audioRef={audioRef}
@@ -185,12 +198,25 @@ export default function VibeClient({ id }: { id: string }) {
         ratingNode={ratingNode}
         shareNode={shareNode}
         ampRef={ampRef}
+        remixRef={remixRef}
+        onSaveReflection={submitReflection}
+        sharePath={
+          vibe.share_initials && vibe.share_index
+            ? `/${vibe.share_initials}/${vibe.share_index}`
+            : null
+        }
       />
 
       <ShareDialog
         id={id}
         open={shareOpen}
         initialName={vibe.creator_name}
+        initialInitials={vibe.share_initials}
+        initialPath={
+          vibe.share_initials && vibe.share_index
+            ? `/${vibe.share_initials}/${vibe.share_index}`
+            : null
+        }
         onClose={() => setShareOpen(false)}
         accent={accent}
       />
