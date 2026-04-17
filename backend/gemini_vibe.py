@@ -47,6 +47,8 @@ Return JSON with this exact shape:
 }
 
 Hard rules for accuracy:
+- OUTPUT LANGUAGE: write `summary`, `storyline.setting`, `storyline.arc`, `storyline.characters[].name`, `storyline.characters[].role`, `vibe.name`, and `vibe.description` IN THE SAME LANGUAGE AS THE LYRICS — Russian lyrics → Russian text, Uzbek lyrics → Uzbek text, English lyrics → English text, Spanish lyrics → Spanish text, etc. This matches the feel of the song for listeners who speak it. If instrumental, default to English.
+- The fields `mood`, `tempo`, `energy`, `figure`, `language` stay in English (they are stable tags consumed by code).
 - LYRICS: transcribe what is actually sung. Do not paraphrase. Do not invent. If a line is unclear, write your best phonetic guess — never fabricate.
 - LYRICS_CONFIDENCE: a 0..1 number for how sure you are the transcription is accurate. Use 0.85+ only when the vocals are clear, in a language you transcribe well, and you caught most lines. Use 0.3-0.55 for partially audible or heavy-accented vocals where you guessed. Use 0 for instrumental. Be honest — callers will hide the lyrics pane if this is low.
 - TIMESTAMPS: `time` is seconds from audio start, of when that line begins. Be precise within ~1.5s. Lines should be in chronological order. One sung phrase per entry (roughly 4-12 words). Do NOT clump several lines into one entry.

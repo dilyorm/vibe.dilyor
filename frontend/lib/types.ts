@@ -58,6 +58,7 @@ export interface Vibe {
   reflections?: { text: string; at: number }[];
   share_initials?: string | null;
   share_index?: number | null;
+  private?: boolean;
   vibe: VibeMeta | Record<string, never>;
   audio_ext?: string;
   mime_type?: string;

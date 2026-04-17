@@ -38,6 +38,8 @@ interface Props {
   remixRef: React.MutableRefObject<RemixState>;
   onSaveReflection?: (text: string) => Promise<void>;
   sharePath?: string | null;
+  isPrivate?: boolean;
+  onTogglePrivacy?: () => Promise<void>;
 }
 
 export default function StoryDeck({
@@ -64,6 +66,8 @@ export default function StoryDeck({
   lyricsConfidence,
   onSaveReflection,
   sharePath,
+  isPrivate,
+  onTogglePrivacy,
 }: Props) {
   const story = storyline ?? {};
   const characters = story.characters ?? [];
@@ -288,6 +292,8 @@ export default function StoryDeck({
           remixRef={remixRef}
           onSaveReflection={onSaveReflection}
           sharePath={sharePath}
+          isPrivate={isPrivate}
+          onTogglePrivacy={onTogglePrivacy}
         />
       </div>
     </div>
@@ -439,6 +445,8 @@ function SlideContent(props: {
   remixRef: React.MutableRefObject<RemixState>;
   onSaveReflection?: (text: string) => Promise<void>;
   sharePath?: string | null;
+  isPrivate?: boolean;
+  onTogglePrivacy?: () => Promise<void>;
 }) {
   const {
     slide,
@@ -462,6 +470,8 @@ function SlideContent(props: {
     remixRef,
     onSaveReflection,
     sharePath,
+    isPrivate,
+    onTogglePrivacy,
   } = props;
 
   switch (slide.kind) {
@@ -663,6 +673,12 @@ function SlideContent(props: {
             </div>
           )}
 
+          <PrivacyToggle
+            isPrivate={isPrivate}
+            onToggle={onTogglePrivacy}
+            accent={accent}
+          />
+
           <a
             href="/library"
             className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] opacity-60 hover:opacity-100 underline-offset-4 hover:underline relative z-20"
@@ -672,6 +688,63 @@ function SlideContent(props: {
         </div>
       );
   }
+}
+
+function PrivacyToggle({
+  isPrivate,
+  onToggle,
+  accent,
+}: {
+  isPrivate?: boolean;
+  onToggle?: () => Promise<void>;
+  accent: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [local, setLocal] = useState<boolean | undefined>(isPrivate);
+
+  if (!onToggle) return null;
+
+  const current = local ?? isPrivate ?? false;
+
+  const click = async () => {
+    if (busy) return;
+    setBusy(true);
+    // optimistic flip; parent persists + refreshes
+    setLocal(!current);
+    try {
+      await onToggle();
+    } catch {
+      setLocal(current);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={click}
+      disabled={busy}
+      className="relative z-20 flex items-center gap-2 text-[11px] uppercase tracking-[0.25em] opacity-70 hover:opacity-100 transition"
+      style={{ color: current ? accent : undefined }}
+    >
+      <span
+        className="inline-block w-8 h-[18px] rounded-full border transition"
+        style={{
+          background: current ? "rgba(255,255,255,0.05)" : accent,
+          borderColor: current ? `${accent}88` : "transparent",
+        }}
+      >
+        <span
+          className="block w-[14px] h-[14px] rounded-full mt-[1px] transition-transform"
+          style={{
+            background: current ? accent : "#0b0b10",
+            transform: current ? "translateX(2px)" : "translateX(16px)",
+          }}
+        />
+      </span>
+      {current ? "hidden from library" : "in public library"}
+    </button>
+  );
 }
 
 function RemixSlide({

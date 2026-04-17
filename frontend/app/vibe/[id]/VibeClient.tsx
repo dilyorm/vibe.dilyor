@@ -5,7 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import StarRating from "@/components/StarRating";
 import StoryDeck from "@/components/StoryDeck";
 import ShareDialog from "@/components/ShareDialog";
-import { audioUrl, getVibe, rateVibe, saveReflection, similarVibes } from "@/lib/api";
+import {
+  audioUrl,
+  getVibe,
+  rateVibe,
+  saveReflection,
+  setPrivacy,
+  similarVibes,
+} from "@/lib/api";
 import { createAmp, createRemix, useAudio } from "@/lib/audioAmp";
 import { hasVibe, type Palette, type Vibe, type VibeListItem } from "@/lib/types";
 
@@ -85,6 +92,17 @@ export default function VibeClient({ id }: { id: string }) {
     },
     [id],
   );
+
+  const togglePrivacy = useCallback(async () => {
+    if (!vibe) return;
+    const next = !vibe.private;
+    try {
+      await setPrivacy(id, next);
+      setVibe({ ...vibe, private: next });
+    } catch {
+      /* leave state as-is; button will re-flip optimistically */
+    }
+  }, [id, vibe]);
 
   if (err) {
     return (
@@ -205,6 +223,8 @@ export default function VibeClient({ id }: { id: string }) {
             ? `/${vibe.share_initials}/${vibe.share_index}`
             : null
         }
+        isPrivate={vibe.private}
+        onTogglePrivacy={togglePrivacy}
       />
 
       <ShareDialog

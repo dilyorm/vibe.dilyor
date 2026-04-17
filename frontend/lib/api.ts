@@ -73,6 +73,16 @@ export async function shareVibe(id: string, name: string, initials = "") {
   }>;
 }
 
+export async function setPrivacy(id: string, isPrivate: boolean) {
+  const res = await fetch(`${BASE}/vibes/${id}/privacy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ private: isPrivate }),
+  });
+  if (!res.ok) throw new Error("couldn't change privacy");
+  return res.json() as Promise<{ private: boolean }>;
+}
+
 export async function saveReflection(id: string, text: string) {
   const res = await fetch(`${BASE}/vibes/${id}/reflection`, {
     method: "POST",

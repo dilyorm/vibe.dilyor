@@ -43,6 +43,10 @@ class ReflectionIn(BaseModel):
     text: str
 
 
+class PrivacyIn(BaseModel):
+    private: bool
+
+
 class UrlIn(BaseModel):
     url: str
     title_hint: str = ""
@@ -95,7 +99,21 @@ def _normalize_initials(s: str) -> str:
 
 @app.get("/api/vibes")
 def list_vibes():
-    return [_list_view(v) for v in storage.list_vibes() if v.get("status") == "ready"]
+    return [
+        _list_view(v)
+        for v in storage.list_vibes()
+        if v.get("status") == "ready" and not v.get("private")
+    ]
+
+
+@app.post("/api/vibes/{vibe_id}/privacy")
+def set_privacy(vibe_id: str, body: PrivacyIn):
+    v = storage.get_vibe(vibe_id)
+    if not v:
+        raise HTTPException(404, "vibe not found")
+    v["private"] = bool(body.private)
+    storage.save_vibe(v)
+    return {"private": v["private"]}
 
 
 @app.get("/api/vibes/{vibe_id}/similar")
@@ -111,7 +129,7 @@ def similar_vibes(vibe_id: str, limit: int = 6):
 
     scored: list[tuple[float, dict]] = []
     for v in storage.list_vibes():
-        if v["id"] == vibe_id or v.get("status") != "ready":
+        if v["id"] == vibe_id or v.get("status") != "ready" or v.get("private"):
             continue
         meta = v.get("vibe") or {}
         score = 0.0
