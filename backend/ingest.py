@@ -41,7 +41,7 @@ def _cookie_opts() -> dict[str, Any]:
     return opts
 
 MAX_DURATION_SEC = 15 * 60
-SUPPORTED_EXT = {".mp3", ".m4a", ".webm", ".ogg", ".opus", ".wav", ".flac", ".aac"}
+SUPPORTED_EXT = {".mp3", ".m4a", ".webm", ".ogg", ".opus", ".wav", ".flac", ".aac", ".mp4"}
 
 
 class IngestError(RuntimeError):
@@ -50,19 +50,23 @@ class IngestError(RuntimeError):
 
 def download_audio(url: str, dest_no_ext: Path) -> tuple[Path, str, dict]:
     """Download best audio stream. Returns (path, mime_type, info)."""
-    opts = {
-        "format": "bestaudio/best",
-        "outtmpl": str(dest_no_ext) + ".%(ext)s",
+    cookie = _cookie_opts()
+
+    # Probe metadata first WITHOUT any format constraint — otherwise yt-dlp
+    # surfaces "Requested format is not available" before download even starts.
+    probe_opts = {
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
-        "restrictfilenames": True,
-        **_cookie_opts(),
+        "skip_download": True,
+        # Use multiple YouTube player clients — `web` alone often returns
+        # only DRM/SABR formats yt-dlp can't fetch. android+ios are reliable.
+        "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
+        **cookie,
     }
-
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with yt_dlp.YoutubeDL(probe_opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as e:
         raise IngestError(f"could not read link: {e}") from e
@@ -71,8 +75,25 @@ def download_audio(url: str, dest_no_ext: Path) -> tuple[Path, str, dict]:
     if duration and duration > MAX_DURATION_SEC:
         raise IngestError(f"track too long ({duration}s, max {MAX_DURATION_SEC}s)")
 
+    # Permissive cascade — try audio-only formats first, then any format.
+    # If the chosen stream is video+audio, yt-dlp can still extract the
+    # audio file from disk; we accept whatever extension lands.
+    download_opts = {
+        "format": (
+            "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/"
+            "bestaudio/best[acodec!=none]/best"
+        ),
+        "outtmpl": str(dest_no_ext) + ".%(ext)s",
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "nocheckcertificate": True,
+        "restrictfilenames": True,
+        "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
+        **cookie,
+    }
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with yt_dlp.YoutubeDL(download_opts) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as e:
         raise IngestError(f"download failed: {e}") from e
