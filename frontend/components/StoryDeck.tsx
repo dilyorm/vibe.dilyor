@@ -15,6 +15,7 @@ interface Slide {
 }
 
 interface Props {
+  vibeId: string;
   title: string;
   artist?: string;
   vibeName?: string;
@@ -43,6 +44,7 @@ interface Props {
 }
 
 export default function StoryDeck({
+  vibeId,
   title,
   artist,
   vibeName,
@@ -272,6 +274,7 @@ export default function StoryDeck({
         <SlideContent
           key={idx}
           slide={slide}
+          vibeId={vibeId}
           title={title}
           artist={artist}
           vibeName={vibeName}
@@ -425,6 +428,7 @@ function Backdrop({
 
 function SlideContent(props: {
   slide: Slide;
+  vibeId: string;
   title: string;
   artist?: string;
   vibeName?: string;
@@ -450,6 +454,7 @@ function SlideContent(props: {
 }) {
   const {
     slide,
+    vibeId,
     title,
     artist,
     vibeName,
@@ -628,19 +633,20 @@ function SlideContent(props: {
             onSave={onSaveReflection}
           />
 
-          <div className="relative z-20 flex flex-wrap items-center justify-center gap-3">
-            {shareNode}
-            <Poster
-              title={title}
-              vibeName={vibeName}
-              mood={mood}
-              artist={artist}
-              palette={palette}
-              lyrics={lyrics}
-              storyline={storyline}
-              sharePath={sharePath}
-            />
-          </div>
+          <Poster
+            vibeId={vibeId}
+            title={title}
+            vibeName={vibeName}
+            mood={mood}
+            artist={artist}
+            palette={palette}
+            lyrics={lyrics}
+            storyline={storyline}
+            sharePath={sharePath}
+            coverUrl={coverUrl}
+          />
+
+          <div className="relative z-20">{shareNode}</div>
 
           {similar.length > 0 && (
             <div className="w-full relative z-20">

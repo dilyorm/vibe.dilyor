@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
 // Resolve the vanity URL server-side and redirect to the canonical /vibe/{id}
-// page. Fetches from the backend proxy and hands the id to the existing
-// VibeClient. If the handle doesn't resolve, render a small 404.
+// page. NOTE: `redirect()` throws NEXT_REDIRECT — it MUST run outside any
+// try/catch or the framework's special exception gets swallowed.
 export default async function HandlePage({
   params,
 }: {
@@ -15,17 +15,22 @@ export default async function HandlePage({
   }
 
   const base = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+  let targetId: string | null = null;
   try {
     const res = await fetch(`${base}/api/handle/${initials}/${n}`, {
       cache: "no-store",
     });
-    if (!res.ok) return <NotFound />;
-    const v = await res.json();
-    if (!v?.id) return <NotFound />;
-    redirect(`/vibe/${v.id}`);
+    if (res.ok) {
+      const v = await res.json();
+      if (v?.id) targetId = v.id;
+    }
   } catch {
-    return <NotFound />;
+    // fall through to NotFound
   }
+
+  if (!targetId) return <NotFound />;
+  redirect(`/vibe/${targetId}`);
 }
 
 function NotFound() {

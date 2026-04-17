@@ -196,6 +196,7 @@ export default function VibeClient({ id }: { id: string }) {
       />
 
       <StoryDeck
+        vibeId={vibe.id}
         title={vibe.title}
         artist={vibe.artist}
         vibeName={meta?.name}

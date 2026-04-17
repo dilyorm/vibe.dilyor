@@ -106,6 +106,37 @@ def list_vibes():
     ]
 
 
+@app.get("/api/vibes/{vibe_id}/cover")
+def proxy_cover(vibe_id: str):
+    """Stream the vibe's cover image back to the browser with open CORS.
+    Needed so the client-side Poster canvas can `drawImage` the cover —
+    YouTube thumbnails don't set Access-Control-Allow-Origin."""
+    import httpx
+    from fastapi.responses import Response
+
+    v = storage.get_vibe(vibe_id)
+    if not v:
+        raise HTTPException(404, "vibe not found")
+    url = v.get("cover_url") or v.get("thumbnail")
+    if not url:
+        raise HTTPException(404, "no cover")
+    try:
+        with httpx.Client(timeout=8.0, follow_redirects=True) as c:
+            r = c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            content_type = r.headers.get("content-type", "image/jpeg")
+            return Response(
+                content=r.content,
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+    except Exception as e:
+        raise HTTPException(502, f"cover fetch failed: {e}")
+
+
 @app.post("/api/vibes/{vibe_id}/privacy")
 def set_privacy(vibe_id: str, body: PrivacyIn):
     v = storage.get_vibe(vibe_id)
