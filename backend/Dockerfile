@@ -7,9 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# yt-dlp needs ffmpeg + ca-certs to fetch + remux audio
+# yt-dlp needs:
+#   ffmpeg     — remux/concat audio
+#   nodejs     — solve YouTube's JS signature/n-challenges
+#   ca-certs   — TLS
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates nodejs \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./

@@ -54,12 +54,18 @@ def download_audio(url: str, dest_no_ext: Path) -> tuple[Path, str, dict]:
 
     # Probe metadata first WITHOUT any format constraint — otherwise yt-dlp
     # surfaces "Requested format is not available" before download even starts.
+    #
+    # `js_runtimes={'node': {}}` enables YouTube's JS signature/n-challenge
+    # solver via Node.js (yt-dlp default is `deno` which most users don't
+    # have). Without a working JS runtime, YouTube returns ONLY storyboard
+    # formats and downloads fail with "format not available".
     probe_opts = {
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
         "skip_download": True,
+        "js_runtimes": {"node": {}},
         # Use multiple YouTube player clients — `web` alone often returns
         # only DRM/SABR formats yt-dlp can't fetch. android+ios are reliable.
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
@@ -85,31 +91,47 @@ def download_audio(url: str, dest_no_ext: Path) -> tuple[Path, str, dict]:
         "no_warnings": True,
         "nocheckcertificate": True,
         "restrictfilenames": True,
+        "js_runtimes": {"node": {}},
         **cookie,
     }
+    # ffmpeg post-processor extracts audio to m4a so:
+    #   - we never ship a 70 MB video to Gemini (25 MB upload cap)
+    #   - HTML5 <audio> always plays, regardless of source container
+    # Falls back gracefully if ffmpeg isn't on PATH (postprocessor errors,
+    # outer cascade tries the next attempt).
+    audio_postproc = [{
+        "key": "FFmpegExtractAudio",
+        "preferredcodec": "m4a",
+        "preferredquality": "192",
+    }]
+
     attempts: list[dict[str, Any]] = [
-        # 1: audio-only via android client (most reliable for audio-only)
+        # 1: web client — has the widest format coverage in practice
         {
             **base,
             "format": "bestaudio/best",
-            "extractor_args": {"youtube": {"player_client": ["android"]}},
+            "extractor_args": {"youtube": {"player_client": ["web", "mweb"]}},
+            "postprocessors": audio_postproc,
         },
-        # 2: same with ios client
+        # 2: ios client (often smaller HLS audio streams)
         {
             **base,
             "format": "bestaudio/best",
             "extractor_args": {"youtube": {"player_client": ["ios"]}},
+            "postprocessors": audio_postproc,
         },
-        # 3: web client, looser selector
+        # 3: android client
         {
             **base,
-            "format": "bestaudio*/best*/b",
-            "extractor_args": {"youtube": {"player_client": ["web", "web_safari"]}},
+            "format": "bestaudio/best",
+            "extractor_args": {"youtube": {"player_client": ["android"]}},
+            "postprocessors": audio_postproc,
         },
-        # 4: last resort — let yt-dlp default. May require ffmpeg to mux.
+        # 4: last resort — let yt-dlp default + extract audio
         {
             **base,
-            "extractor_args": {"youtube": {"player_client": ["android", "ios", "web"]}},
+            "extractor_args": {"youtube": {"player_client": ["web", "ios", "android"]}},
+            "postprocessors": audio_postproc,
         },
     ]
 
@@ -189,6 +211,7 @@ def search(query: str, limit: int = 6) -> list[dict[str, Any]]:
         "extract_flat": True,
         "skip_download": True,
         "default_search": f"ytsearch{limit}",
+        "js_runtimes": {"node": {}},
         **_cookie_opts(),
     }
     try:
