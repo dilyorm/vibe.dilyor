@@ -223,25 +223,29 @@ export default function StoryDeck({
         </button>
       </div>
 
-      {/* tap zones — left 30% goes back, rest advances (IG-style) */}
-      <button
-        aria-label="previous"
-        onClick={onTapLeft}
-        onMouseDown={onPressStart}
-        onMouseUp={onPressEnd}
-        onTouchStart={onPressStart}
-        onTouchEnd={onPressEnd}
-        className="absolute left-0 top-0 bottom-0 w-[30%] z-10"
-      />
-      <button
-        aria-label="next"
-        onClick={onTapRight}
-        onMouseDown={onPressStart}
-        onMouseUp={onPressEnd}
-        onTouchStart={onPressStart}
-        onTouchEnd={onPressEnd}
-        className="absolute right-0 top-0 bottom-0 w-[70%] z-10"
-      />
+      {/* tap zones — disabled on outro (interactive content there) */}
+      {slide.kind !== "outro" && (
+        <>
+          <button
+            aria-label="previous"
+            onClick={onTapLeft}
+            onMouseDown={onPressStart}
+            onMouseUp={onPressEnd}
+            onTouchStart={onPressStart}
+            onTouchEnd={onPressEnd}
+            className="absolute left-0 top-0 bottom-0 w-[30%] z-10"
+          />
+          <button
+            aria-label="next"
+            onClick={onTapRight}
+            onMouseDown={onPressStart}
+            onMouseUp={onPressEnd}
+            onTouchStart={onPressStart}
+            onTouchEnd={onPressEnd}
+            className="absolute right-0 top-0 bottom-0 w-[70%] z-10"
+          />
+        </>
+      )}
 
       {/* slide content */}
       <div className="absolute inset-0 z-[5] grid place-items-center px-5 sm:px-8 pb-10 pt-20 sm:pt-24 overflow-y-auto">
