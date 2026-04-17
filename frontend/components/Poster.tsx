@@ -252,18 +252,36 @@ export default function Poster({
       const shareUrl = sharePath
         ? `https://vibe.dilyor.dev${sharePath}`
         : "https://vibe.dilyor.dev";
+      const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+
       const payload: ShareData = {
         files: [file],
         title: `${title} · vibe`,
         text: `${title} — feel it on vibe.dilyor.dev`,
         url: shareUrl,
       };
+
+      // Primary: native share sheet with the PNG attached. On iOS/Android
+      // the user picks Instagram and the image drops straight into the
+      // Stories editor — this is the flow Spotify uses outside its app.
       if (nav.canShare && nav.canShare(payload) && nav.share) {
         await nav.share(payload);
-        setStatus("shared");
+        setStatus("opening instagram…");
+        return;
+      }
+
+      // Secondary: save image + copy link. On mobile also punch the user
+      // straight into the Instagram Stories camera (image is in their
+      // camera roll; one swipe up and they pick it).
+      await navigator.clipboard.writeText(shareUrl).catch(() => {});
+      download();
+      if (isMobile) {
+        setStatus("saved — opening instagram…");
+        // must happen synchronously off the click gesture for iOS Safari
+        setTimeout(() => {
+          window.location.href = "instagram://story-camera";
+        }, 600);
       } else {
-        await navigator.clipboard.writeText(shareUrl).catch(() => {});
-        download();
         setStatus("saved + link copied — paste into your story");
       }
     } catch (e: unknown) {
