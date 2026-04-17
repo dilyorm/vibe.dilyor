@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: ./backend
+    image: vibe-backend:local
+    container_name: vibe-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/data:/app/data
+      # To pass YouTube cookies, copy this to docker-compose.override.yml:
+      #
+      # services:
+      #   backend:
+      #     environment:
+      #       YTDLP_COOKIES_FILE: /app/cookies.txt
+      #     volumes:
+      #       - ./cookies.txt:/app/cookies.txt:ro
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8000
+    image: vibe-frontend:local
+    container_name: vibe-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
