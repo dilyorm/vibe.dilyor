@@ -151,72 +151,15 @@ export default function UploadCard() {
       </div>
 
       {tab === "search" && (
-        <div>
-          <div className="text-center mb-5">
-            <h2 className="font-serif text-3xl md:text-4xl tracking-tight">
-              what song you feeling?
-            </h2>
-            <p className="text-sm opacity-70 mt-2">
-              type any song. pick the right one. we do the rest.
-            </p>
-          </div>
-          <div className="max-w-xl mx-auto relative">
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="blinding lights, konsuba ost, mc ride anything…"
-              className="w-full px-5 py-4 rounded-full bg-white/10 border border-white/20 focus:border-white/40 focus:outline-none placeholder:opacity-40 text-sm"
-              disabled={busy}
-            />
-            {searching && (
-              <span className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-            )}
-          </div>
-
-          <div className="mt-6 max-w-xl mx-auto flex flex-col gap-2">
-            {results && results.length === 0 && !searching && query.trim().length >= 2 && (
-              <p className="text-sm opacity-60 text-center py-6">no results. try different words.</p>
-            )}
-            {results?.map((r) => {
-              const picking = pickingId === r.id;
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => pickResult(r)}
-                  disabled={busy}
-                  className="group flex items-center gap-4 p-2 pr-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-left disabled:opacity-60"
-                >
-                  <div
-                    className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-black/40"
-                    style={{
-                      backgroundImage: r.thumbnail ? `url(${r.thumbnail})` : undefined,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  >
-                    {picking && (
-                      <div className="absolute inset-0 grid place-items-center bg-black/50">
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white/90 rounded-full animate-spin" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium line-clamp-2">{r.title}</div>
-                    <div className="text-xs opacity-60 mt-1">
-                      {r.channel}
-                      {r.duration ? ` · ${fmtDuration(r.duration)}` : ""}
-                    </div>
-                  </div>
-                  <span className="text-xs opacity-50 group-hover:opacity-100">
-                    {picking ? "loading…" : "pick →"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-6 text-xs opacity-40 text-center">
-            picking streams audio from the source. no account, no upload.
+        <div className="text-center py-6">
+          <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
+            search
+          </h2>
+          <p className="text-sm opacity-50">
+            not available for now.
+          </p>
+          <p className="mt-2 text-xs opacity-40">
+            use upload or link to drop a track.
           </p>
         </div>
       )}
